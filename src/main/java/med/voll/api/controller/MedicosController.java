@@ -6,6 +6,7 @@ import med.voll.api.repository.MedicoRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -20,6 +21,7 @@ public class MedicosController {
     }
 
     @PostMapping
+    @Transactional
     public ResponseEntity<String> cadastrar(@RequestBody DadosCadastroMedico dados){
         log.info(dados.toString());
         repository.save(new Medico(dados));
