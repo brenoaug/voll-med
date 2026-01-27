@@ -9,7 +9,7 @@ import med.voll.api.dto.DadosAtualizacaoMedico;
 import med.voll.api.dto.DadosCadastroMedico;
 import med.voll.api.dto.enums.Especialidade;
 
-@Entity(name = "medico")
+@Entity(name = "Medico")
 @Table(name = "medicos")
 @Getter
 @NoArgsConstructor

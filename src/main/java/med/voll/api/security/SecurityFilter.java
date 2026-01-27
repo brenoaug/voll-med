@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import med.voll.api.repository.UsuarioRepository;
 import med.voll.api.security.service.TokenService;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -18,10 +19,9 @@ import java.io.IOException;
 public class SecurityFilter extends OncePerRequestFilter {
 
     private final TokenService tokenService;
-
     private final UsuarioRepository repository;
 
-    public SecurityFilter(TokenService tokenService, UsuarioRepository repository) {
+    public SecurityFilter(TokenService tokenService, @Lazy UsuarioRepository repository) {
         this.tokenService = tokenService;
         this.repository = repository;
     }

@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 import med.voll.api.dto.DadosAtualizacaoPaciente;
 import med.voll.api.dto.DadosCadastroPaciente;
 
-@Entity(name = "paciente")
+@Entity(name = "Paciente")
 @Table(name = "pacientes")
 @Getter
 @AllArgsConstructor
