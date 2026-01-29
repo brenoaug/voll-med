@@ -3,15 +3,13 @@ package med.voll.api.controller;
 
 import jakarta.validation.Valid;
 import med.voll.api.dto.DadosAgendamentoConsulta;
+import med.voll.api.dto.DadosCancelamentoConsulta;
 import med.voll.api.dto.DadosDetalhamentoConsulta;
 import med.voll.api.exception.ValidacaoException;
 import med.voll.api.service.AgendaDeConsultas;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("consultas")
@@ -30,4 +28,10 @@ public class ConsultaController {
         return ResponseEntity.ok(new DadosDetalhamentoConsulta(null, null, null, null));
     }
 
+    @DeleteMapping
+    @Transactional
+    public ResponseEntity<DadosCancelamentoConsulta> cancelar(@RequestBody @Valid DadosCancelamentoConsulta dados) throws ValidacaoException {
+        agendaDeConsultas.cancelar(dados);
+        return ResponseEntity.noContent().build();
+    }
 }
