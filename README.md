@@ -46,6 +46,9 @@ API REST para gerenciamento de clínica médica, desenvolvida com Spring Boot. O
 - **JWT (JSON Web Token)** - Autenticação via token (Auth0 java-jwt 4.2.1)
 - **BCrypt** - Criptografia de senhas
 
+### Documentação
+- **SpringDoc OpenAPI** - Documentação automática da API (Swagger/OpenAPI 3.0)
+
 ### Utilitários
 - **Lombok** - Redução de código boilerplate
 - **Spring DevTools** - Ferramentas de desenvolvimento
@@ -76,6 +79,22 @@ API REST para gerenciamento de clínica médica, desenvolvida com Spring Boot. O
 - CPF único por paciente
 - Validação de telefone e endereço
 
+### Agendamento de Consultas
+- Agendamento de consultas médicas
+- Validação de horários de funcionamento (segunda a sábado, 07:00 às 19:00)
+- Validação de antecedência mínima (30 minutos)
+- Escolha automática de médico disponível por especialidade
+- Validações de negócio:
+  - Médico ativo
+  - Paciente ativo
+  - Médico sem outra consulta no mesmo horário
+  - Paciente sem outra consulta no mesmo dia
+- Cancelamento de consultas com antecedência mínima de 24 horas
+- Motivos de cancelamento:
+  - Paciente desistiu
+  - Médico cancelou
+  - Outros
+
 ## Arquitetura
 
 O projeto segue uma arquitetura em camadas:
@@ -85,14 +104,18 @@ src/main/java/med/voll/api/
 ├── ApiApplication.java      # Classe principal da aplicação
 ├── controller/              # Controladores REST (Camada de apresentação)
 │   ├── AutenticacaoController.java
+│   ├── ConsultaController.java
 │   ├── MedicosController.java
 │   └── PacientesController.java
 ├── dto/                     # Data Transfer Objects
+│   ├── DadosAgendamentoConsulta.java
 │   ├── DadosAutenticacao.java
 │   ├── DadosCadastroMedico.java
 │   ├── DadosCadastroPaciente.java
+│   ├── DadosCancelamentoConsulta.java
 │   ├── DadosAtualizacaoMedico.java
 │   ├── DadosAtualizacaoPaciente.java
+│   ├── DadosDetalhamentoConsulta.java
 │   ├── DadosDetalhamentoMedico.java
 │   ├── DadosDetalhamentoPaciente.java
 │   ├── DadosListagemMedico.java
@@ -101,13 +124,16 @@ src/main/java/med/voll/api/
 │   ├── DadosTokenJWT.java
 │   └── enums/
 │       ├── Especialidade.java
+│       ├── MotivoCancelamento.java
 │       └── Uf.java
 ├── entities/                # Entidades JPA (Camada de domínio)
+│   ├── Consulta.java
 │   ├── Medico.java
 │   ├── Paciente.java
 │   ├── Usuario.java
 │   └── Endereco.java        # Classe @Embeddable
 ├── repository/              # Repositórios JPA (Camada de dados)
+│   ├── ConsultaRepository.java
 │   ├── MedicoRepository.java
 │   ├── PacienteRepository.java
 │   └── UsuarioRepository.java
@@ -118,8 +144,25 @@ src/main/java/med/voll/api/
 │   └── service/
 │       ├── AutenticacaoService.java
 │       └── TokenService.java
+├── service/                 # Regras de negócio
+│   ├── AgendaDeConsultas.java
+│   ├── ValidadorAgendamentoDeConsulta.java
+│   ├── ValidadorCancelamentoDeConsulta.java
+│   ├── springdoc/
+│   │   └── SpringDocConfigurations.java
+│   └── validations/
+│       ├── agendamento/
+│       │   ├── ValidadorHorarioAntecedencia.java
+│       │   ├── ValidadorHorarioFuncionamentoClinica.java
+│       │   ├── ValidadorMedicoAtivo.java
+│       │   ├── ValidadorMedicoComOutraConsultaNoMesmoHorario.java
+│       │   ├── ValidadorPacienteAtivo.java
+│       │   └── ValidadorPacienteSemOutraConsultaNoDia.java
+│       └── cancelamento/
+│           └── ValidadorHorarioAntecedencia.java
 └── exception/               # Tratamento global de exceções
-    └── TratadorDeErros.java
+    ├── TratadorDeErros.java
+    └── ValidacaoException.java
 ```
 
 ## Pré-requisitos
@@ -189,6 +232,19 @@ mvn spring-boot:run
 O Spring DevTools está habilitado para reinicialização automática durante o desenvolvimento.
 
 A aplicação estará disponível em: `http://localhost:8080`
+
+### Documentação da API (Swagger)
+
+A documentação interativa da API está disponível através do Swagger UI:
+
+- **Swagger UI**: `http://localhost:8080/swagger-ui.html`
+- **OpenAPI JSON**: `http://localhost:8080/v3/api-docs`
+
+A interface do Swagger permite:
+- Visualizar todos os endpoints disponíveis
+- Testar as requisições diretamente pelo navegador
+- Ver os schemas de entrada e saída
+- Autenticar usando o token JWT
 
 ## Endpoints da API
 
@@ -333,6 +389,58 @@ DELETE /pacientes/{id}
 Authorization: Bearer {token}
 ```
 
+### Consultas
+
+#### Agendar Consulta
+```http
+POST /consultas
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "idMedico": 1,
+  "idPaciente": 1,
+  "data": "2026-02-15T10:00:00",
+  "especialidade": "CARDIOLOGIA"
+}
+```
+
+**Resposta:**
+```json
+{
+  "id": 1,
+  "idMedico": 1,
+  "idPaciente": 1,
+  "data": "2026-02-15T10:00:00"
+}
+```
+
+**Observações:**
+- O campo `idMedico` é opcional. Se não informado, o sistema escolhe automaticamente um médico disponível da especialidade indicada
+- O campo `especialidade` é obrigatório quando `idMedico` não é informado
+- A consulta deve ser agendada com pelo menos 30 minutos de antecedência
+- O horário deve estar dentro do funcionamento da clínica (segunda a sábado, 07:00 às 19:00)
+
+#### Cancelar Consulta
+```http
+DELETE /consultas
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "idConsulta": 1,
+  "motivo": "PACIENTE_DESISTIU"
+}
+```
+
+**Motivos de cancelamento:**
+- `PACIENTE_DESISTIU`
+- `MEDICO_CANCELOU`
+- `OUTROS`
+
+**Observações:**
+- O cancelamento deve ser feito com pelo menos 24 horas de antecedência
+
 ## Autenticação
 
 A API utiliza JWT (JSON Web Token) para autenticação. O fluxo é:
@@ -398,6 +506,8 @@ O Flyway gerencia o versionamento do banco de dados. As migrações estão em `s
 - **V7** - Adição da coluna `ativo` (TINYINT) na tabela `pacientes`
 - **V8** - Adição da coluna `ativo` na tabela `medicos`
 - **V9** - Criação da tabela `usuarios`
+- **V10** - Criação da tabela `consultas`
+- **V11** - Adição da coluna `motivo_cancelamento` na tabela `consultas`
 
 ### Executar Migrações Manualmente
 
@@ -413,6 +523,70 @@ mvn flyway:clean
 
 ## Testes
 
+O projeto inclui testes unitários e de integração para garantir a qualidade do código.
+
+### Estrutura de Testes
+
+```
+src/test/java/med/voll/api/
+├── ApiApplicationTests.java           # Testes de contexto da aplicação
+├── controller/
+│   ├── ConsultaControllerTest.java    # Testes do controller de consultas
+│   └── MedicosControllerTest.java     # Testes do controller de médicos
+└── repository/
+    └── MedicoRepositoryTest.java      # Testes do repositório de médicos
+```
+
+### Tipos de Testes
+
+#### Testes de Controller (@WebMvcTest)
+- Testam apenas a camada de controller (slice testing)
+- Utilizam `MockMvc` para simular requisições HTTP
+- Usam `@MockBean` para isolar dependências de serviços
+- Validam status HTTP, headers e corpo das respostas
+
+Exemplo: `ConsultaControllerTest`
+```java
+@WebMvcTest(ConsultaController.class)
+class ConsultaControllerTest {
+    @Autowired
+    private MockMvc mockMvc;
+    
+    @MockBean
+    private AgendaDeConsultas agendaDeConsultas;
+    
+    @Test
+    @WithMockUser
+    void deveRetornar200QuandoDadosValidos() {
+        // teste...
+    }
+}
+```
+
+#### Testes de Repositório (@DataJpaTest)
+- Testam queries customizadas do repositório
+- Usam banco de dados em memória ou configurado
+- Validam comportamento de consultas JPA
+
+Exemplo: `MedicoRepositoryTest`
+```java
+@DataJpaTest
+@AutoConfigureTestDatabase(replace = Replace.NONE)
+@ActiveProfiles("test")
+class MedicoRepositoryTest {
+    @Autowired
+    private MedicoRepository medicoRepository;
+    
+    @Autowired
+    private TestEntityManager em;
+    
+    @Test
+    void deveEscolherMedicoAleatorio() {
+        // teste...
+    }
+}
+```
+
 ### Executar Testes
 
 ```bash
@@ -424,6 +598,25 @@ mvn test
 ```bash
 mvn test jacoco:report
 ```
+
+### Configuração de Testes
+
+O projeto utiliza o perfil `test` para testes, configurado em `application-test.properties`:
+
+```properties
+spring.datasource.url=jdbc:mysql://localhost:3306/vollmed_api_test
+spring.jpa.show-sql=false
+spring.jpa.properties.hibernate.format_sql=false
+```
+
+### Boas Práticas de Testes Implementadas
+
+- **Isolamento**: Testes não dependem uns dos outros
+- **Slice Testing**: Uso de `@WebMvcTest` e `@DataJpaTest` para testes focados
+- **Mocks**: Uso de `@MockBean` para isolar dependências
+- **Nomenclatura Clara**: Nomes de testes descritivos (padrão: `deve...Quando...`)
+- **Anotações de Segurança**: Uso de `@WithMockUser` para simular autenticação
+- **Validação Completa**: Testes verificam status HTTP, corpo e comportamento esperado
 
 ## Build
 
@@ -454,11 +647,16 @@ mvn clean package -DskipTests
 - **Exclusão Lógica** - Soft delete para manter histórico
 - **Paginação** - Listagens paginadas para performance
 - **Validação** - Validação robusta de dados de entrada
+- **Validações de Negócio** - Validadores específicos para regras de agendamento e cancelamento
+- **Strategy Pattern** - Múltiplos validadores aplicados dinamicamente
 - **Tratamento de Erros** - Respostas padronizadas de erro
 - **Segurança** - Autenticação JWT e proteção de endpoints
+- **Documentação Automática** - Swagger/OpenAPI integrado
 - **Logs** - Logging estruturado com SLF4J
 - **Migrações** - Versionamento de banco de dados com Flyway
 - **Injeção de Dependência** - Uso de construtores para DI
+- **Testes Automatizados** - Cobertura com testes unitários e de integração
+- **Slice Testing** - Testes focados em camadas específicas
 
 ## Estrutura de Dados
 
@@ -495,6 +693,13 @@ mvn clean package -DskipTests
 - Login
 - Senha (criptografada)
 
+### Consulta
+- ID (gerado automaticamente)
+- Médico (relacionamento @ManyToOne)
+- Paciente (relacionamento @ManyToOne)
+- Data e hora
+- Motivo de cancelamento (PACIENTE_DESISTIU, MEDICO_CANCELOU, OUTROS)
+
 ## Contribuição
 
 Contribuições são bem-vindas! Para contribuir:
@@ -515,14 +720,19 @@ Contribuições são bem-vindas! Para contribuir:
 
 ## Aprendizados
 
-Este projeto foi desenvolvido como parte do programa Oracle ONE na Alura, focando em:
+Este projeto foi desenvolvido focando em:
 
 - Desenvolvimento de APIs REST com Spring Boot
 - Boas práticas de desenvolvimento Java
 - Persistência de dados com JPA/Hibernate
 - Versionamento de banco de dados com Flyway
 - Validação de dados com Bean Validation
+- Implementação de regras de negócio complexas
+- Padrão Strategy para validações
 - Segurança com Spring Security e JWT
 - Tratamento de exceções e respostas HTTP
+- Documentação de APIs com Swagger/OpenAPI
+- Testes automatizados (unitários e de integração)
 - Arquitetura em camadas
 - Princípios SOLID
+- Relacionamentos JPA (@ManyToOne, @Embeddable)
